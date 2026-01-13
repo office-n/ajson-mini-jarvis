@@ -1,0 +1,5 @@
+{
+  "name": "ajson-mini-jarvis",
+  "main": "workers/src/worker.ts",
+  "compatibility_date": "2026-01-13"
+}
