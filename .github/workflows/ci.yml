@@ -1,0 +1,17 @@
+name: AJSON CI (Linux)
+on:
+  pull_request:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke Test (Factory Check)
+        run: |
+          test -f docs/CONSTITUTION.md
+          test -f docs/SHP.md
+          test -f console/index.html
+          echo "✅ CI is running on ubuntu-latest."

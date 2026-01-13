@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS Console V1</title>
+<style>
+body { font-family: -apple-system,BlinkMacSystemFont,monospace; background:#000; color:#0f0; padding:20px; line-height:1.5; }
+.card { border:1px solid #333; padding:15px; margin-bottom:20px; border-radius:8px; }
+.meter { background:#222; height:10px; width:100%; margin-top:5px; border-radius:5px; }
+.fill { background:#0f0; height:100%; width:0%; border-radius:5px; transition:width .5s; }
+input { background:#111; border:1px solid #333; color:#fff; padding:10px; width:70%; border-radius:4px; }
+button{ background:#0f0; color:#000; border:none; padding:10px 20px; cursor:pointer; border-radius:4px; font-weight:bold; }
+</style>
+</head>
+<body>
+<h1>JARVIS Console <span style="font-size:.6em; color:#666;">[ONLINE / V1 Mock]</span></h1>
+
+<div class="card">
+  <strong>💰 Budget Meter (Dev)</strong>
+  <div id="btxt">Used: ¥0 / ¥3,000 (Stop at 90%)</div>
+  <div class="meter"><div id="fill" class="fill"></div></div>
+</div>
+
+<div class="card">
+  <strong>💬 Command Center</strong>
+  <div id="log" style="margin:10px 0; color:#aaa; font-size:.9em;">
+    > System Initialized.<br>> Ready for instruction.
+  </div>
+  <div style="display:flex; gap:10px;">
+    <input type="text" id="cmd" placeholder="例: ヘッダーのロゴを大きくして">
+    <button onclick="send()">SEND</button>
+  </div>
+</div>
+
+<script>
+let used=0, limit=3000;
+function render(){
+  document.getElementById('btxt').textContent = `Used: ¥${used} / ¥${limit} (Stop at 90%)`;
+  document.getElementById('fill').style.width = Math.min(100, (used/limit)*100) + '%';
+}
+function send(){
+  const cmd=document.getElementById('cmd').value.trim(); if(!cmd) return;
+  const stop = used >= limit*0.9;
+  if(stop){
+    document.getElementById('log').innerHTML += `<br>> JARVIS: 予算90%到達。新規受付停止（Mock）`;
+    return;
+  }
+  used += 60; render();
+  document.getElementById('log').innerHTML += `<br>> Boss: ${cmd}<br>> JARVIS: 了解。PR作成とCI検証を開始します...(Mock)`;
+  document.getElementById('cmd').value='';
+}
+render();
+</script>
+</body>
+</html>

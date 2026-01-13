@@ -1,0 +1,6 @@
+{
+  "fx_rate_jpy_per_usd": 156,
+  "hard_cap": { "dev_jpy": 3000, "ops_jpy": 5000, "warn_ratio": 0.9 },
+  "ci_cap_minutes": { "warn": 1600, "limit": 2000 },
+  "model_policy": { "default": "gpt-4o-mini", "promotion": "gpt-4o" }
+}
