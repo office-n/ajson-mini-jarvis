@@ -1,5 +1,158 @@
-export default {
-  async fetch() {
-    return new Response("OK");
+export interface Env {
+  // D1等を後で追加する場合に備えて予約（現時点では必須ではない）
+  // DB?: D1Database;
+}
+
+const MAX_TOTAL_BYTES = 1_000_000; // 1MB hard cap (server)
+const JSON_CT = "application/json; charset=utf-8";
+
+function json(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { "content-type": JSON_CT },
+  });
+}
+
+function text(body: string, status = 200): Response {
+  return new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
+}
+
+function stripTrailingSlash(s: string): string {
+  return s.replace(/\/+$/, "");
+}
+
+function isLikelyDataUrl(v: string): boolean {
+  return v.startsWith("data:") && v.includes(";base64,");
+}
+
+function estimateDataUrlBytes(dataUrl: string): number {
+  // data:<mime>;base64,XXXX
+  const idx = dataUrl.indexOf(";base64,");
+  if (idx === -1) return 0;
+  const b64 = dataUrl.slice(idx + ";base64,".length);
+  // base64 -> bytes approximation: len * 3/4 - padding
+  const padding = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+  return Math.floor((b64.length * 3) / 4) - padding;
+}
+
+type Attachment = {
+  name: string;
+  type: string;
+  size: number;     // client-declared bytes
+  data_url: string; // Data URL
+};
+
+type CommandPayload = {
+  prompt?: string;
+  attachments?: Attachment[];
+};
+
+async function readJson(req: Request): Promise<unknown> {
+  const ct = req.headers.get("content-type") || "";
+  if (!ct.toLowerCase().includes("application/json")) {
+    throw new Error("content-type must be application/json");
   }
+  return await req.json();
+}
+
+function badRequest(msg: string) {
+  return json({ ok: false, error: msg }, 400);
+}
+
+function payloadTooLarge(msg: string) {
+  return json({ ok: false, error: msg }, 413);
+}
+
+function ok(data: unknown) {
+  return json({ ok: true, ...data }, 200);
+}
+
+export default {
+  async fetch(req: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(req.url);
+    const path = url.pathname;
+    const method = req.method.toUpperCase();
+
+    // Health contract (Day 0)
+    if (method === "GET" && path === "/healthz") {
+      return text("ok", 200);
+    }
+    if (method === "GET" && path === "/api/status") {
+      return ok({
+        service: "ajson-mini-jarvis",
+        status: "ok",
+        time: new Date().toISOString(),
+      });
+    }
+
+    // Attachment-enabled command endpoint
+    if (path === "/api/command") {
+      if (method !== "POST") return badRequest("POST only");
+
+      let body: CommandPayload;
+      try {
+        body = (await readJson(req)) as CommandPayload;
+      } catch (e) {
+        return badRequest(`invalid json: ${String(e)}`);
+      }
+
+      const prompt = (body.prompt ?? "").toString();
+      const attachments = Array.isArray(body.attachments) ? body.attachments : [];
+
+      // Validate attachments
+      let totalBytes = 0;
+      const normalized: Array<{
+        name: string;
+        type: string;
+        size: number;
+        estimated_bytes: number;
+      }> = [];
+
+      for (const a of attachments) {
+        if (!a || typeof a !== "object") return badRequest("attachments must be objects");
+        const name = (a.name ?? "").toString();
+        const type = (a.type ?? "application/octet-stream").toString();
+        const size = Number((a as any).size ?? 0);
+        const dataUrl = (a as any).data_url;
+
+        if (!name) return badRequest("attachment.name is required");
+        if (!Number.isFinite(size) || size < 0) return badRequest(`attachment.size invalid: ${name}`);
+        if (typeof dataUrl !== "string" || !isLikelyDataUrl(dataUrl)) {
+          return badRequest(`attachment.data_url must be data:*;base64,: ${name}`);
+        }
+
+        // Server-side cap: use declared size + estimated from base64 for defense-in-depth
+        const est = estimateDataUrlBytes(dataUrl);
+        totalBytes += Math.max(size, est);
+
+        normalized.push({ name, type, size, estimated_bytes: est });
+
+        if (totalBytes > MAX_TOTAL_BYTES) {
+          return payloadTooLarge(`attachments total exceeds 1MB (server cap). current=${totalBytes} bytes`);
+        }
+      }
+
+      // Non-blocking log (do not store raw base64 in logs)
+      ctx.waitUntil(
+        (async () => {
+          console.log("[command] prompt_len=", prompt.length, "attachments=", normalized);
+        })()
+      );
+
+      // Day 0 behavior: acknowledge receipt + return summary
+      return ok({
+        received: {
+          prompt_len: prompt.length,
+          attachments_count: normalized.length,
+          attachments: normalized,
+          total_bytes_estimate: totalBytes,
+        },
+        next: {
+          note: "Day 0: attachments are acknowledged and logged. D1 persistence can be added later if required.",
+        },
+      });
+    }
+
+    return json({ ok: false, error: "not found", path }, 404);
+  },
 };
