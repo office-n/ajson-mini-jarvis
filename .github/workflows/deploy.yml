@@ -6,8 +6,6 @@ on:
     paths:
       - "workers/**"
       - "wrangler.jsonc"
-      - "package.json"
-      - "package-lock.json"
       - ".github/workflows/deploy.yml"
 
 concurrency:
@@ -26,11 +24,8 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install dependencies
-        run: npm ci
-
       - name: Deploy to Cloudflare Workers
-        run: npx wrangler deploy --config wrangler.jsonc
+        run: npx --yes wrangler deploy --config wrangler.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
