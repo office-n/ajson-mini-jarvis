@@ -2,251 +2,2038 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AJSON mini Console</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0b0f14" />
+  <title>JARVIS Console</title>
+
+  <!--
+    JARVIS Console (V2 Premium)
+    - Single-file (no external deps)
+    - Responsive (Desktop + Mobile)
+    - Attachments (<= 1MB total)
+    - Health/Status checks
+    - Settings modal (API Base URL, TTS toggle, etc.)
+    - Chat timeline + collapsible raw JSON
+    - Future-ready: preview URL & screenshot slots
+  -->
+
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    input[type="text"]{ width: min(820px, 100%); padding: 10px; }
-    textarea { width: min(980px, 100%); height: 180px; padding: 10px; }
-    button { padding: 10px 14px; cursor: pointer; }
-    .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; margin: 14px 0; }
-    .muted { color: #666; }
-    pre { background: #f7f7f7; padding: 12px; border-radius: 8px; overflow: auto; }
-    ul { margin: 8px 0 0 18px; }
-    .ok { color: #0a7a0a; font-weight: 600; }
-    .ng { color: #b00020; font-weight: 600; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    :root{
+      --bg0:#070a0f;
+      --bg1:#0b0f14;
+      --panel: rgba(255,255,255,.06);
+      --panel2: rgba(255,255,255,.08);
+      --stroke: rgba(255,255,255,.10);
+      --stroke2: rgba(255,255,255,.16);
+
+      --text:#e9eef6;
+      --muted: rgba(233,238,246,.72);
+      --subtle: rgba(233,238,246,.56);
+
+      --accent:#57ff9a;
+      --accent2:#7cf7ff;
+      --warn:#ffd36e;
+      --danger:#ff6b8a;
+      --ok:#57ff9a;
+
+      --shadow: 0 18px 60px rgba(0,0,0,.50);
+      --shadow2: 0 10px 30px rgba(0,0,0,.40);
+      --radius: 18px;
+      --radius2: 26px;
+
+      --maxw: 1080px;
+
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI","Yu Gothic", sans-serif;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; }
+    }
+
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(1200px 900px at 20% -10%, rgba(124,247,255,.10), transparent 60%),
+        radial-gradient(900px 700px at 95% 10%, rgba(87,255,154,.08), transparent 55%),
+        radial-gradient(900px 900px at 35% 95%, rgba(255,211,110,.06), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow:hidden;
+    }
+
+    .app{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+    }
+
+    /* Top bar */
+    .topbar{
+      position:sticky;
+      top:0;
+      z-index:50;
+      padding: env(safe-area-inset-top) 14px 10px 14px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: linear-gradient(180deg, rgba(7,10,15,.85), rgba(7,10,15,.45));
+      border-bottom: 1px solid rgba(255,255,255,.07);
+    }
+
+    .topbar-inner{
+      max-width: var(--maxw);
+      margin: 0 auto;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    .brand{
+      display:flex;
+      align-items:baseline;
+      gap:10px;
+      min-width: 220px;
+    }
+    .logo{
+      font-weight: 800;
+      letter-spacing:.5px;
+      font-size: 20px;
+      line-height:1;
+      color: var(--text);
+    }
+    .logo b{
+      color: var(--accent);
+      text-shadow: 0 0 16px rgba(87,255,154,.25);
+    }
+    .tag{
+      font-size: 12px;
+      color: var(--subtle);
+      letter-spacing:.2px;
+    }
+
+    .status-pill{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding: 8px 12px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      border-radius: 999px;
+      box-shadow: var(--shadow2);
+      user-select:none;
+      white-space:nowrap;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:50%;
+      background: rgba(255,255,255,.25);
+      box-shadow: 0 0 0 4px rgba(255,255,255,.05);
+    }
+    .dot.ok{ background: var(--ok); box-shadow: 0 0 0 4px rgba(87,255,154,.10); }
+    .dot.warn{ background: var(--warn); box-shadow: 0 0 0 4px rgba(255,211,110,.10); }
+    .dot.bad{ background: var(--danger); box-shadow: 0 0 0 4px rgba(255,107,138,.10); }
+
+    .status-text{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      line-height:1.1;
+    }
+    .status-text .line1{
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .status-text .line2{
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(233,238,246,.62);
+    }
+
+    .actions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    .btn{
+      appearance:none;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 9px 12px;
+      font-size: 12px;
+      letter-spacing:.2px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+      box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    }
+    .btn:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.07); }
+    .btn:active{ transform: translateY(0px); }
+    .btn.primary{
+      border-color: rgba(87,255,154,.35);
+      background: linear-gradient(180deg, rgba(87,255,154,.18), rgba(87,255,154,.06));
+    }
+    .btn.ghost{
+      background: transparent;
+      box-shadow: none;
+    }
+    .btn.danger{
+      border-color: rgba(255,107,138,.30);
+      background: linear-gradient(180deg, rgba(255,107,138,.14), rgba(255,107,138,.05));
+    }
+
+    .btn svg{ width:14px; height:14px; opacity:.9; }
+
+    /* Main layout */
+    .main{
+      flex:1;
+      overflow:hidden;
+      padding: 10px 14px 0 14px;
+    }
+    .main-inner{
+      max-width: var(--maxw);
+      height: 100%;
+      margin: 0 auto;
+      display:grid;
+      grid-template-columns: 1fr 360px;
+      gap: 12px;
+      align-items:stretch;
+    }
+
+    @media (max-width: 1024px){
+      .main-inner{
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: var(--radius2);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+
+    .chat{
+      display:flex;
+      flex-direction:column;
+      min-height: 0;
+    }
+    .chat-header{
+      padding: 14px 16px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      background: rgba(0,0,0,.10);
+    }
+    .chat-header .title{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .chat-header .title .h{
+      font-weight: 700;
+      letter-spacing:.2px;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .chat-header .title .s{
+      font-size: 12px;
+      color: var(--subtle);
+    }
+
+    .budget{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width: 260px;
+    }
+    .meter{
+      flex:1;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.08);
+      overflow:hidden;
+    }
+    .meter > i{
+      display:block; height:100%;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(87,255,154,.55), rgba(124,247,255,.45));
+      box-shadow: 0 0 18px rgba(87,255,154,.18);
+    }
+    .budget .label{
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(233,238,246,.70);
+      white-space:nowrap;
+    }
+
+    .timeline{
+      flex:1;
+      overflow:auto;
+      padding: 14px;
+      scroll-behavior:smooth;
+    }
+
+    /* Message bubbles */
+    .msg{
+      display:flex;
+      gap:10px;
+      margin: 10px 0;
+    }
+    .avatar{
+      width: 34px; height: 34px;
+      border-radius: 14px;
+      flex: 0 0 auto;
+      display:grid;
+      place-items:center;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+    }
+    .avatar .a{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(233,238,246,.75);
+    }
+    .bubble{
+      flex:1;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      padding: 12px 12px 10px 12px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.25);
+      min-width: 0;
+    }
+    .msg.user .bubble{
+      background: linear-gradient(180deg, rgba(87,255,154,.12), rgba(255,255,255,.04));
+      border-color: rgba(87,255,154,.22);
+    }
+    .msg.system .bubble{
+      background: linear-gradient(180deg, rgba(124,247,255,.10), rgba(255,255,255,.04));
+      border-color: rgba(124,247,255,.20);
+    }
+    .meta{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom: 8px;
+      color: rgba(233,238,246,.62);
+      font-size: 11px;
+      font-family: var(--mono);
+    }
+    .meta .left{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      min-width:0;
+    }
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      font-size: 11px;
+      font-family: var(--mono);
+      color: rgba(233,238,246,.70);
+    }
+    .badge.ok{ border-color: rgba(87,255,154,.22); }
+    .badge.warn{ border-color: rgba(255,211,110,.22); }
+    .badge.bad{ border-color: rgba(255,107,138,.22); }
+
+    .text{
+      font-size: 14px;
+      line-height: 1.75;
+      letter-spacing:.1px;
+      color: rgba(233,238,246,.92);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .tools{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top: 10px;
+    }
+    .tool{
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      color: rgba(233,238,246,.78);
+      cursor:pointer;
+      transition: background .12s ease, border-color .12s ease, transform .12s ease;
+    }
+    .tool:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.06); }
+
+    details.raw{
+      margin-top: 10px;
+      border: 1px dashed rgba(255,255,255,.12);
+      border-radius: 14px;
+      padding: 10px 10px;
+      background: rgba(0,0,0,.12);
+    }
+    details.raw > summary{
+      cursor:pointer;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(233,238,246,.70);
+      outline:none;
+    }
+    pre.json{
+      margin: 8px 0 0 0;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.6;
+      color: rgba(233,238,246,.82);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Right panel */
+    .side{
+      display:flex;
+      flex-direction:column;
+      min-height: 0;
+    }
+    .side-header{
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      background: rgba(0,0,0,.10);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .side-header .h{
+      font-weight:700;
+      font-size:13px;
+      color: var(--text);
+    }
+    .side-body{
+      flex:1;
+      overflow:auto;
+      padding: 12px;
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+    }
+
+    .section{
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+    .section .sh{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom: 8px;
+    }
+    .section .sh .t{
+      font-size: 12px;
+      color: rgba(233,238,246,.86);
+      font-weight: 650;
+      letter-spacing:.2px;
+    }
+    .section .sh .u{
+      font-size: 11px;
+      color: rgba(233,238,246,.56);
+      font-family: var(--mono);
+    }
+
+    .kv{
+      display:grid;
+      grid-template-columns: 92px 1fr;
+      gap: 8px 10px;
+      font-size: 12px;
+      line-height:1.5;
+    }
+    .kv .k{ color: rgba(233,238,246,.60); font-family: var(--mono); font-size: 11px; }
+    .kv .v{ color: rgba(233,238,246,.88); word-break: break-word; }
+
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      margin-top:8px;
+    }
+    .item{
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 14px;
+      padding: 10px;
+      background: rgba(0,0,0,.12);
+    }
+    .item .i1{ display:flex; justify-content:space-between; gap:8px; font-family: var(--mono); font-size: 11px; color: rgba(233,238,246,.70); }
+    .item .i2{ margin-top:6px; font-size: 12px; color: rgba(233,238,246,.88); word-break: break-word; }
+    .item .i2 a{ color: var(--accent2); text-decoration:none; }
+    .item .i2 a:hover{ text-decoration: underline; }
+
+    .thumbs{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap:10px;
+      margin-top: 8px;
+    }
+    .thumb{
+      border-radius: 14px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      cursor:pointer;
+      transition: transform .12s ease, border-color .12s ease;
+    }
+    .thumb:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.18); }
+    .thumb img{ width:100%; height:120px; object-fit: cover; display:block; }
+
+    /* Composer */
+    .composer-wrap{
+      padding: 0 14px env(safe-area-inset-bottom) 14px;
+    }
+    .composer-inner{
+      max-width: var(--maxw);
+      margin: 0 auto;
+      padding: 12px 0 14px 0;
+    }
+    .composer{
+      border: 1px solid rgba(255,255,255,.10);
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .composer-top{
+      padding: 10px 12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      background: rgba(0,0,0,.10);
+    }
+    .composer-top .left{
+      display:flex; align-items:center; gap:10px; min-width: 0;
+    }
+    .hint{
+      font-size: 12px;
+      color: rgba(233,238,246,.68);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .limit{
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(233,238,246,.58);
+    }
+
+    .attach-strip{
+      padding: 10px 12px 0 12px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      min-height: 0;
+    }
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.12);
+      color: rgba(233,238,246,.82);
+      font-size: 12px;
+      max-width: 100%;
+    }
+    .chip .name{
+      max-width: 220px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .chip .x{
+      cursor:pointer;
+      width: 18px; height: 18px;
+      display:grid; place-items:center;
+      border-radius: 9px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      font-size: 12px;
+      color: rgba(233,238,246,.70);
+    }
+
+    .composer-mid{
+      padding: 10px 12px 12px 12px;
+      display:flex;
+      gap:10px;
+      align-items:flex-end;
+    }
+    textarea{
+      flex:1;
+      min-height: 44px;
+      max-height: 180px;
+      resize:none;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.14);
+      color: rgba(233,238,246,.94);
+      border-radius: 16px;
+      padding: 12px 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      outline:none;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.12);
+    }
+    textarea::placeholder{ color: rgba(233,238,246,.42); }
+
+    .controls{
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .iconbtn{
+      width: 44px; height: 44px;
+      border-radius: 16px;
+      display:grid;
+      place-items:center;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      cursor:pointer;
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+      user-select:none;
+    }
+    .iconbtn:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.07); }
+    .iconbtn:active{ transform: translateY(0px); }
+    .iconbtn.primary{
+      border-color: rgba(87,255,154,.30);
+      background: linear-gradient(180deg, rgba(87,255,154,.18), rgba(87,255,154,.06));
+    }
+    .iconbtn.bad{
+      border-color: rgba(255,107,138,.25);
+    }
+    .iconbtn svg{ width: 18px; height: 18px; opacity:.95; }
+
+    /* Mobile bottom-sheet panel trigger */
+    .mobile-panel-btn{
+      display:none;
+    }
+    @media (max-width: 1024px){
+      .side{ display:none; }
+      .mobile-panel-btn{ display:inline-flex; }
+    }
+
+    /* Drag overlay */
+    .dropzone{
+      position:fixed;
+      inset: 0;
+      display:none;
+      place-items:center;
+      z-index: 80;
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .dropzone .dz{
+      width:min(520px, calc(100% - 24px));
+      border-radius: 26px;
+      border:1px dashed rgba(124,247,255,.40);
+      background: linear-gradient(180deg, rgba(124,247,255,.08), rgba(87,255,154,.06));
+      padding: 18px;
+      box-shadow: var(--shadow);
+      text-align:center;
+    }
+    .dropzone .dz .t{
+      font-weight: 800;
+      letter-spacing:.3px;
+      margin-bottom: 6px;
+    }
+    .dropzone .dz .s{
+      color: rgba(233,238,246,.70);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    /* Dialogs */
+    dialog{
+      width: min(720px, calc(100% - 24px));
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 26px;
+      background: linear-gradient(180deg, rgba(13,18,26,.96), rgba(8,11,17,.94));
+      color: var(--text);
+      box-shadow: var(--shadow);
+      padding: 0;
+    }
+    dialog::backdrop{
+      background: rgba(0,0,0,.62);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .dlg-head{
+      padding: 16px 16px 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .dlg-head .h{
+      font-weight: 800;
+      letter-spacing:.2px;
+    }
+    .dlg-body{
+      padding: 14px 16px 16px 16px;
+    }
+    .dlg-foot{
+      padding: 12px 16px 16px 16px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      display:flex;
+      justify-content:flex-end;
+      gap: 8px;
+    }
+
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      margin-bottom: 12px;
+    }
+    .field label{
+      font-size: 12px;
+      color: rgba(233,238,246,.70);
+      font-family: var(--mono);
+    }
+    .field input[type="text"], .field select{
+      height: 42px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.18);
+      color: rgba(233,238,246,.92);
+      padding: 0 12px;
+      outline:none;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 680px){
+      .row{ grid-template-columns: 1fr; }
+    }
+    .toggle{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.12);
+      border-radius: 18px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .toggle .t{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .toggle .t .h{
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .toggle .t .s{
+      font-size: 12px;
+      color: rgba(233,238,246,.62);
+      line-height: 1.5;
+    }
+    .switch{
+      width: 46px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      position: relative;
+      cursor:pointer;
+      user-select:none;
+    }
+    .switch i{
+      position:absolute;
+      top: 3px; left: 3px;
+      width: 20px; height: 20px;
+      border-radius: 10px;
+      background: rgba(233,238,246,.80);
+      transition: left .12s ease, background .12s ease;
+    }
+    .switch.on{
+      border-color: rgba(87,255,154,.25);
+      background: rgba(87,255,154,.10);
+    }
+    .switch.on i{
+      left: 23px;
+      background: rgba(87,255,154,.92);
+    }
+
+    /* Toast */
+    .toast{
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: calc(env(safe-area-inset-bottom) + 86px);
+      z-index: 90;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      pointer-events:none;
+    }
+    .toast .t{
+      pointer-events:none;
+      padding: 10px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: rgba(233,238,246,.92);
+      font-size: 12px;
+      box-shadow: var(--shadow2);
+      max-width: min(560px, calc(100vw - 24px));
+    }
+    .t.ok{ border-color: rgba(87,255,154,.22); }
+    .t.warn{ border-color: rgba(255,211,110,.22); }
+    .t.bad{ border-color: rgba(255,107,138,.22); }
+
+    /* Utility */
+    .hide{ display:none !important; }
+    .muted{ color: rgba(233,238,246,.62); }
+    .mono{ font-family: var(--mono); }
+    a{ color: var(--accent2); }
   </style>
 </head>
+
 <body>
-  <h1>AJSON mini Console</h1>
+<div class="app">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="logo"><b>JARVIS</b> Console</div>
+        <div class="tag">ONLINE / Premium UI</div>
+      </div>
 
-  <div class="card">
-    <div class="row">
-      <label class="mono">API Base URL</label>
-      <input id="apiBase" type="text" placeholder="例: https://xxxx.workers.dev" />
-      <button id="saveApi">保存</button>
-      <button id="healthzBtn">/healthz</button>
-      <button id="statusBtn">/api/status</button>
-    </div>
-    <div class="muted" style="margin-top:8px;">
-      Console は Pages 上の静的UIです。実際の処理先（Workers）の URL をここに設定します（localStorage保存）。
+      <div class="status-pill" title="接続状況（手動チェック推奨）">
+        <div id="statusDot" class="dot"></div>
+        <div class="status-text">
+          <div id="statusLine1" class="line1">Not checked</div>
+          <div id="statusLine2" class="line2">base: —</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btnPanel" class="btn ghost mobile-panel-btn" type="button" title="パネル">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Panel
+        </button>
+
+        <button id="btnCheck" class="btn" type="button" title="/healthz と /api/status を確認">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Check
+        </button>
+
+        <button id="btnSettings" class="btn primary" type="button" title="設定（API Base URL / TTS / etc）">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a7.97 7.97 0 0 0 .1-2l2-1.5-2-3.5-2.4.7a8.1 8.1 0 0 0-1.7-1l-.4-2.5h-4l-.4 2.5a8.1 8.1 0 0 0-1.7 1L5.5 8 3.5 11.5 5.5 13a8 8 0 0 0 .1 2l-2 1.5 2 3.5 2.4-.7a8.1 8.1 0 0 0 1.7 1l.4 2.5h4l.4-2.5a8.1 8.1 0 0 0 1.7-1l2.4.7 2-3.5-2-1.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          Settings
+        </button>
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <h2>Command</h2>
-    <textarea id="prompt" placeholder="指示（テキスト）を入力"></textarea>
+  <!-- MAIN -->
+  <div class="main">
+    <div class="main-inner">
+      <!-- CHAT -->
+      <div class="card chat" id="chatCard">
+        <div class="chat-header">
+          <div class="title">
+            <div class="h">Command Center</div>
+            <div class="s">会話ログが主役。添付/音声/プレビューへ拡張可能な“器”を先に完成させる。</div>
+          </div>
 
-    <div class="row" style="margin-top:10px;">
-      <label>添付（複数可 / 合計 1MB以下）</label>
-      <input id="fileInput" type="file" multiple />
-      <button id="clearFiles">添付クリア</button>
-    </div>
+          <div class="budget" title="予算表示（現状はUIのみ。台帳化はPhase2/D1）">
+            <div class="meter"><i id="budgetBar"></i></div>
+            <div class="label" id="budgetLabel">Dev: ¥0 / ¥3000</div>
+          </div>
+        </div>
 
-    <div id="fileInfo" class="muted" style="margin-top:8px;"></div>
+        <div id="timeline" class="timeline" aria-live="polite">
+          <!-- initial system message -->
+        </div>
+      </div>
 
-    <div class="row" style="margin-top:12px;">
-      <button id="sendBtn">送信（/api/command）</button>
-      <span id="sendState" class="muted"></span>
+      <!-- SIDE PANEL (desktop) -->
+      <div class="card side" id="sidePanel">
+        <div class="side-header">
+          <div class="h">Inspector</div>
+          <div class="muted mono" style="font-size:11px;">Fail-Closed</div>
+        </div>
+        <div class="side-body">
+          <div class="section">
+            <div class="sh">
+              <div class="t">Connection</div>
+              <div class="u" id="connMini">—</div>
+            </div>
+            <div class="kv">
+              <div class="k">base</div><div class="v" id="baseUrlView">—</div>
+              <div class="k">healthz</div><div class="v" id="healthView">—</div>
+              <div class="k">status</div><div class="v" id="statusView">—</div>
+            </div>
+            <div class="tools" style="margin-top:10px;">
+              <button class="tool" id="btnHealth" type="button">GET /healthz</button>
+              <button class="tool" id="btnStatus" type="button">GET /api/status</button>
+              <button class="tool" id="btnClear" type="button">Clear Log</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="sh">
+              <div class="t">Preview URLs</div>
+              <div class="u">Phase1.2</div>
+            </div>
+            <div id="previewList" class="list">
+              <div class="item">
+                <div class="i1"><span>hint</span><span class="muted">manual/auto</span></div>
+                <div class="i2 muted">レスポンスに preview_url が含まれたらここに表示します。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="sh">
+              <div class="t">Screenshots</div>
+              <div class="u">Phase1.2</div>
+            </div>
+            <div id="shotGrid" class="thumbs">
+              <div class="thumb" style="display:grid;place-items:center;height:120px;color:rgba(233,238,246,.55);font-size:12px;">
+                wait…
+              </div>
+              <div class="thumb" style="display:grid;place-items:center;height:120px;color:rgba(233,238,246,.55);font-size:12px;">
+                wait…
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <div class="card">
-    <h2>Result</h2>
-    <div id="resultMeta" class="muted"></div>
-    <pre id="result" class="mono">{}</pre>
+  <!-- COMPOSER -->
+  <div class="composer-wrap">
+    <div class="composer-inner">
+      <div class="composer" id="composer">
+        <div class="composer-top">
+          <div class="left">
+            <div class="hint" id="hint">API Base URL を設定してから、添付＋指示を送信してください。</div>
+            <div class="limit" id="limit">attachments: 0 / 1,048,576 bytes</div>
+          </div>
+          <div class="controls">
+            <button id="btnAttach" class="btn" type="button" title="添付（<=1MB）">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M8 12.5 14.5 6a3 3 0 1 1 4.2 4.2L11 17.9a5 5 0 1 1-7.1-7.1L12 2.7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Attach
+            </button>
+
+            <button id="btnMic" class="btn" type="button" title="音声入力（ブラウザSTT：対応ブラウザのみ）">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" stroke="currentColor" stroke-width="2"/><path d="M19 11a7 7 0 0 1-14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 18v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              Mic
+            </button>
+
+            <button id="btnSend" class="btn primary" type="button" title="送信（/api/command）">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M3 11.5 21 3l-8.5 18-2.3-6.2L3 11.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+              Send
+            </button>
+          </div>
+        </div>
+
+        <div id="attachStrip" class="attach-strip"></div>
+
+        <div class="composer-mid">
+          <textarea id="prompt" placeholder="例：インバウンドサイトSaaSの要件を添付した。分解→実装計画→テスト→プレビュー提示まで、Fail-Closedで進めて。"></textarea>
+
+          <div class="controls">
+            <button id="btnTTS" class="iconbtn" type="button" title="TTS 再生（結果テキスト→/api/tts）">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M11 5 6 9H3v6h3l5 4V5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M15.5 8.5a4 4 0 0 1 0 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+
+            <button id="btnStopAudio" class="iconbtn bad" type="button" title="音声停止">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M6 6h12v12H6z" stroke="currentColor" stroke-width="2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <!-- Drag overlay -->
+  <div id="dropzone" class="dropzone" aria-hidden="true">
+    <div class="dz">
+      <div class="t">Drop files to attach</div>
+      <div class="s">合計サイズ <= 1MB を厳守。超過は Fail-Closed（送信不可）</div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" aria-live="polite"></div>
+
+  <!-- SETTINGS DIALOG -->
+  <dialog id="dlgSettings">
+    <div class="dlg-head">
+      <div class="h">Settings</div>
+      <button class="btn ghost" type="button" id="btnCloseSettings">Close</button>
+    </div>
+    <div class="dlg-body">
+      <div class="field">
+        <label for="baseUrl">API Base URL</label>
+        <input id="baseUrl" type="text" placeholder="https://ajson-mini-jarvis.officeenu.workers.dev" />
+      </div>
+
+      <div class="row">
+        <div class="toggle">
+          <div class="t">
+            <div class="h">TTS enabled</div>
+            <div class="s">結果テキストを /api/tts に送って再生します（既定OFF推奨）。</div>
+          </div>
+          <div id="swTts" class="switch"><i></i></div>
+        </div>
+
+        <div class="toggle">
+          <div class="t">
+            <div class="h">Plan-only mode</div>
+            <div class="s">Phase1.1はACK中心。実行より計画/分解を優先（将来拡張）。</div>
+          </div>
+          <div id="swPlan" class="switch on"><i></i></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="ttsVoice">TTS voice（将来）</label>
+          <select id="ttsVoice">
+            <option value="auto">auto</option>
+            <option value="alloy">alloy</option>
+            <option value="verse">verse</option>
+            <option value="aria">aria</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="themeHint">Theme hint</label>
+          <input id="themeHint" type="text" value="premium-dark" disabled />
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:8px;">
+        <div class="sh">
+          <div class="t">UX / Fail-Closed</div>
+          <div class="u">fixed</div>
+        </div>
+        <div class="kv">
+          <div class="k">cap</div><div class="v">attachments <= 1MB (strict)</div>
+          <div class="k">mode</div><div class="v">CI First / Stop on error</div>
+          <div class="k">note</div><div class="v">未接続・権限なし・超過は“明示して停止”</div>
+        </div>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" type="button" id="btnReset">Reset</button>
+      <button class="btn primary" type="button" id="btnSave">Save</button>
+    </div>
+  </dialog>
+
+  <!-- MOBILE PANEL (dialog) -->
+  <dialog id="dlgPanel">
+    <div class="dlg-head">
+      <div class="h">Inspector</div>
+      <button class="btn ghost" type="button" id="btnClosePanel">Close</button>
+    </div>
+    <div class="dlg-body">
+      <div class="section">
+        <div class="sh">
+          <div class="t">Connection</div>
+          <div class="u" id="connMiniM">—</div>
+        </div>
+        <div class="kv">
+          <div class="k">base</div><div class="v" id="baseUrlViewM">—</div>
+          <div class="k">healthz</div><div class="v" id="healthViewM">—</div>
+          <div class="k">status</div><div class="v" id="statusViewM">—</div>
+        </div>
+        <div class="tools" style="margin-top:10px;">
+          <button class="tool" id="btnHealthM" type="button">GET /healthz</button>
+          <button class="tool" id="btnStatusM" type="button">GET /api/status</button>
+          <button class="tool" id="btnClearM" type="button">Clear Log</button>
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:10px;">
+        <div class="sh">
+          <div class="t">Preview URLs</div>
+          <div class="u">Phase1.2</div>
+        </div>
+        <div id="previewListM" class="list"></div>
+      </div>
+
+      <div class="section" style="margin-top:10px;">
+        <div class="sh">
+          <div class="t">Screenshots</div>
+          <div class="u">Phase1.2</div>
+        </div>
+        <div id="shotGridM" class="thumbs"></div>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn primary" type="button" id="btnPanelDone">Done</button>
+    </div>
+  </dialog>
+
+  <!-- IMAGE VIEWER (dialog) -->
+  <dialog id="dlgImage">
+    <div class="dlg-head">
+      <div class="h">Screenshot</div>
+      <button class="btn ghost" type="button" id="btnCloseImage">Close</button>
+    </div>
+    <div class="dlg-body" style="padding: 0;">
+      <img id="imgFull" alt="screenshot" style="width:100%; height:auto; display:block;" />
+    </div>
+  </dialog>
+
+</div>
 
 <script>
-(() => {
-  const MAX_TOTAL_BYTES = 1_000_000; // 1MB hard cap (client)
-  const apiBaseEl = document.getElementById('apiBase');
-  const saveApiEl = document.getElementById('saveApi');
-  const healthzBtn = document.getElementById('healthzBtn');
-  const statusBtn = document.getElementById('statusBtn');
+(function(){
+  "use strict";
 
-  const promptEl = document.getElementById('prompt');
-  const fileInputEl = document.getElementById('fileInput');
-  const clearFilesEl = document.getElementById('clearFiles');
-  const fileInfoEl = document.getElementById('fileInfo');
+  /* ===========
+     State
+  =========== */
+  const LS = {
+    baseUrl: "jarvis.baseUrl",
+    ttsEnabled: "jarvis.ttsEnabled",
+    planOnly: "jarvis.planOnly",
+    ttsVoice: "jarvis.ttsVoice",
+  };
 
-  const sendBtnEl = document.getElementById('sendBtn');
-  const sendStateEl = document.getElementById('sendState');
-  const resultEl = document.getElementById('result');
-  const resultMetaEl = document.getElementById('resultMeta');
+  const state = {
+    baseUrl: "",
+    ttsEnabled: false,
+    planOnly: true,
+    ttsVoice: "auto",
+    attachments: [], // { name, type, size, data_url }
+    totalBytes: 0,
+    lastResponseText: "",
+    lastResponseRaw: null,
+    audio: null,
+    recognition: null,
+    micOn: false,
+  };
 
-  /** localStorage **/
-  const LS_KEY = 'ajson_api_base';
-  const saved = localStorage.getItem(LS_KEY);
-  if (saved) apiBaseEl.value = saved;
+  const CAP_BYTES = 1048576; // 1MB strict cap (Fail-Closed)
 
-  function normBase(base) {
-    if (!base) return '';
-    return base.replace(/\/+$/, '');
+  /* ===========
+     DOM
+  =========== */
+  const el = (id)=>document.getElementById(id);
+
+  const timeline = el("timeline");
+  const prompt = el("prompt");
+  const attachStrip = el("attachStrip");
+  const limit = el("limit");
+  const hint = el("hint");
+
+  const statusDot = el("statusDot");
+  const statusLine1 = el("statusLine1");
+  const statusLine2 = el("statusLine2");
+
+  const baseUrlInput = el("baseUrl");
+  const ttsVoiceSel = el("ttsVoice");
+
+  const swTts = el("swTts");
+  const swPlan = el("swPlan");
+
+  const dlgSettings = el("dlgSettings");
+  const dlgPanel = el("dlgPanel");
+  const dlgImage = el("dlgImage");
+
+  const dropzone = el("dropzone");
+  const toast = el("toast");
+
+  /* Side views */
+  const baseUrlView = el("baseUrlView");
+  const healthView = el("healthView");
+  const statusView = el("statusView");
+  const connMini = el("connMini");
+
+  const baseUrlViewM = el("baseUrlViewM");
+  const healthViewM = el("healthViewM");
+  const statusViewM = el("statusViewM");
+  const connMiniM = el("connMiniM");
+
+  const previewList = el("previewList");
+  const shotGrid = el("shotGrid");
+  const previewListM = el("previewListM");
+  const shotGridM = el("shotGridM");
+
+  const imgFull = el("imgFull");
+
+  /* ===========
+     Helpers
+  =========== */
+  function nowISO(){
+    return new Date().toISOString();
   }
 
-  saveApiEl.addEventListener('click', () => {
-    const v = normBase(apiBaseEl.value.trim());
-    apiBaseEl.value = v;
-    localStorage.setItem(LS_KEY, v);
-    setMeta(`API Base URL を保存しました: ${v}`);
-  });
-
-  function setMeta(msg, ok=true) {
-    resultMetaEl.innerHTML = ok
-      ? `<span class="ok">OK</span> ${escapeHtml(msg)}`
-      : `<span class="ng">NG</span> ${escapeHtml(msg)}`;
+  function fmtBytes(n){
+    if(n < 1024) return `${n} B`;
+    if(n < 1024*1024) return `${(n/1024).toFixed(1)} KB`;
+    return `${(n/1024/1024).toFixed(2)} MB`;
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({
-      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-    }[c]));
+  function setStatus(kind, line1, line2){
+    statusDot.className = "dot " + (kind || "");
+    statusLine1.textContent = line1 || "";
+    statusLine2.textContent = line2 || "";
+    connMini.textContent = (kind || "—").toUpperCase();
+    connMiniM.textContent = (kind || "—").toUpperCase();
   }
 
-  async function apiGet(path) {
-    const base = normBase(apiBaseEl.value.trim());
-    if (!base) throw new Error('API Base URL が未設定です');
-    const url = base + path;
-    const r = await fetch(url, { method: 'GET' });
-    const text = await r.text();
-    let body = text;
-    try { body = JSON.parse(text); } catch {}
-    return { url, status: r.status, body };
+  function toastPush(msg, kind="ok"){
+    const div = document.createElement("div");
+    div.className = `t ${kind}`;
+    div.textContent = msg;
+    toast.appendChild(div);
+    setTimeout(()=>{ div.remove(); }, 2400);
   }
 
-  healthzBtn.addEventListener('click', async () => {
-    try {
-      const out = await apiGet('/healthz');
-      resultEl.textContent = JSON.stringify(out, null, 2);
-      setMeta(`/healthz => HTTP ${out.status} (${out.url})`, out.status === 200);
-    } catch (e) {
-      resultEl.textContent = JSON.stringify({ error: String(e) }, null, 2);
-      setMeta(String(e), false);
+  function safeBaseUrl(){
+    const u = (state.baseUrl || "").trim().replace(/\/+$/,"");
+    return u;
+  }
+
+  function ensureBaseUrl(){
+    const u = safeBaseUrl();
+    if(!u){
+      toastPush("API Base URL が未設定です（Settingsで設定）", "warn");
+      setStatus("warn", "Base URL missing", "open Settings");
+      return null;
     }
-  });
-
-  statusBtn.addEventListener('click', async () => {
-    try {
-      const out = await apiGet('/api/status');
-      resultEl.textContent = JSON.stringify(out, null, 2);
-      setMeta(`/api/status => HTTP ${out.status} (${out.url})`, out.status === 200);
-    } catch (e) {
-      resultEl.textContent = JSON.stringify({ error: String(e) }, null, 2);
-      setMeta(String(e), false);
-    }
-  });
-
-  /** attachments **/
-  let attachments = []; // {name,type,size,dataUrl}
-
-  function renderFiles() {
-    if (!attachments.length) {
-      fileInfoEl.textContent = '添付なし';
-      return;
-    }
-    const total = attachments.reduce((a,f)=>a+f.size,0);
-    const lines = attachments.map(f => `- ${f.name} (${f.type || 'application/octet-stream'}, ${f.size} bytes)`).join('\n');
-    fileInfoEl.innerHTML = `<div>合計: <b>${total}</b> / ${MAX_TOTAL_BYTES} bytes</div><pre class="mono">${escapeHtml(lines)}</pre>`;
+    return u;
   }
 
-  async function fileToDataUrl(file) {
-    return await new Promise((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onerror = () => reject(new Error(`FileReader error: ${file.name}`));
-      fr.onload = () => resolve(fr.result);
-      fr.readAsDataURL(file);
+  function updateViews(){
+    const u = safeBaseUrl() || "—";
+    baseUrlView.textContent = u;
+    baseUrlViewM.textContent = u;
+    statusLine2.textContent = `base: ${u === "—" ? "—" : u}`;
+
+    limit.textContent = `attachments: ${state.attachments.length} / ${fmtBytes(CAP_BYTES)} (used ${fmtBytes(state.totalBytes)})`;
+
+    // toggles view
+    swTts.classList.toggle("on", !!state.ttsEnabled);
+    swPlan.classList.toggle("on", !!state.planOnly);
+
+    // hint
+    if(!safeBaseUrl()){
+      hint.textContent = "API Base URL を設定してください（Settings）";
+    }else if(state.totalBytes > CAP_BYTES){
+      hint.textContent = "添付合計が1MBを超過しています（Fail-Closed：送信不可）";
+    }else{
+      hint.textContent = "添付＋指示を送信できます。Shift+Enterで改行、Enterで送信。";
+    }
+  }
+
+  function autoGrow(){
+    prompt.style.height = "auto";
+    prompt.style.height = Math.min(prompt.scrollHeight, 180) + "px";
+  }
+
+  function mkMsg({role, title, badge, text, raw, localId, commandId}){
+    const wrap = document.createElement("div");
+    wrap.className = `msg ${role}`;
+
+    const av = document.createElement("div");
+    av.className = "avatar";
+    const avt = document.createElement("div");
+    avt.className = "a";
+    avt.textContent = role === "user" ? "YOU" : (role === "system" ? "SYS" : "AI");
+    av.appendChild(avt);
+
+    const b = document.createElement("div");
+    b.className = "bubble";
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+
+    const left = document.createElement("div");
+    left.className = "left";
+    const t = document.createElement("span");
+    t.textContent = title || role.toUpperCase();
+    const id = document.createElement("span");
+    id.textContent = commandId ? `cmd:${commandId}` : (localId ? `local:${localId}` : "");
+    const bdg = document.createElement("span");
+    bdg.className = "badge " + (badge?.kind || "");
+    bdg.textContent = badge?.text || "—";
+
+    left.appendChild(t);
+    if(id.textContent) left.appendChild(id);
+    left.appendChild(bdg);
+
+    const right = document.createElement("div");
+    right.textContent = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+
+    meta.appendChild(left);
+    meta.appendChild(right);
+
+    const body = document.createElement("div");
+    body.className = "text";
+    body.textContent = text || "";
+
+    const tools = document.createElement("div");
+    tools.className = "tools";
+
+    const btnCopy = document.createElement("button");
+    btnCopy.className = "tool";
+    btnCopy.type = "button";
+    btnCopy.textContent = "Copy text";
+    btnCopy.addEventListener("click", async ()=>{
+      try{
+        await navigator.clipboard.writeText(text || "");
+        toastPush("copied", "ok");
+      }catch{
+        toastPush("copy failed", "bad");
+      }
+    });
+
+    const btnCopyJson = document.createElement("button");
+    btnCopyJson.className = "tool";
+    btnCopyJson.type = "button";
+    btnCopyJson.textContent = "Copy JSON";
+    btnCopyJson.addEventListener("click", async ()=>{
+      try{
+        await navigator.clipboard.writeText(raw ? JSON.stringify(raw, null, 2) : "{}");
+        toastPush("json copied", "ok");
+      }catch{
+        toastPush("copy failed", "bad");
+      }
+    });
+
+    tools.appendChild(btnCopy);
+    tools.appendChild(btnCopyJson);
+
+    b.appendChild(meta);
+    b.appendChild(body);
+    b.appendChild(tools);
+
+    if(raw){
+      const det = document.createElement("details");
+      det.className = "raw";
+      const sum = document.createElement("summary");
+      sum.textContent = "raw response (fold/unfold)";
+      const pre = document.createElement("pre");
+      pre.className = "json";
+      pre.textContent = JSON.stringify(raw, null, 2);
+      det.appendChild(sum);
+      det.appendChild(pre);
+      b.appendChild(det);
+    }
+
+    wrap.appendChild(av);
+    wrap.appendChild(b);
+
+    return wrap;
+  }
+
+  function pushMsg(msg){
+    timeline.appendChild(msg);
+    timeline.scrollTop = timeline.scrollHeight;
+  }
+
+  function resetLog(){
+    timeline.innerHTML = "";
+    pushMsg(mkMsg({
+      role:"system",
+      title:"System",
+      badge:{kind:"ok", text:"ready"},
+      text:
+`System initialized.
+- Fail-Closed: size/connection/permission errors are explicit stops.
+- CI First: UI is the primary cockpit (Boss uses Console only).
+- Tip: Set API Base URL in Settings, then attach files (<=1MB total) and send.`,
+      raw: null
+    }));
+  }
+
+  /* ===========
+     Attachments
+  =========== */
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.multiple = true;
+
+  function renderAttachments(){
+    attachStrip.innerHTML = "";
+    state.attachments.forEach((a, idx)=>{
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = `${a.name} (${fmtBytes(a.size)})`;
+      const x = document.createElement("span");
+      x.className = "x";
+      x.textContent = "×";
+      x.title = "remove";
+      x.addEventListener("click", ()=>{
+        state.totalBytes -= a.size;
+        state.attachments.splice(idx,1);
+        renderAttachments();
+        updateViews();
+      });
+      chip.appendChild(name);
+      chip.appendChild(x);
+      attachStrip.appendChild(chip);
+    });
+    updateViews();
+  }
+
+  async function addFiles(files){
+    if(!files || !files.length) return;
+
+    for(const f of files){
+      const nextTotal = state.totalBytes + f.size;
+      if(nextTotal > CAP_BYTES){
+        toastPush(`添付合計が1MBを超過します：${f.name} を追加できません`, "bad");
+        continue;
+      }
+      const data_url = await readAsDataUrl(f);
+      state.attachments.push({
+        name: f.name,
+        type: f.type || "application/octet-stream",
+        size: f.size,
+        data_url
+      });
+      state.totalBytes = nextTotal;
+    }
+    renderAttachments();
+    toastPush("attachments updated", "ok");
+  }
+
+  function readAsDataUrl(file){
+    return new Promise((resolve, reject)=>{
+      const r = new FileReader();
+      r.onload = ()=>resolve(String(r.result || ""));
+      r.onerror = ()=>reject(new Error("File read error"));
+      r.readAsDataURL(file);
     });
   }
 
-  fileInputEl.addEventListener('change', async () => {
-    try {
-      const files = Array.from(fileInputEl.files || []);
-      if (!files.length) {
-        attachments = [];
-        renderFiles();
+  function setupDragDrop(){
+    let dragDepth = 0;
+
+    window.addEventListener("dragenter", (e)=>{
+      e.preventDefault();
+      dragDepth++;
+      dropzone.style.display = "grid";
+    });
+    window.addEventListener("dragover", (e)=>{
+      e.preventDefault();
+    });
+    window.addEventListener("dragleave", (e)=>{
+      e.preventDefault();
+      dragDepth--;
+      if(dragDepth <= 0){
+        dropzone.style.display = "none";
+        dragDepth = 0;
+      }
+    });
+    window.addEventListener("drop", async (e)=>{
+      e.preventDefault();
+      dropzone.style.display = "none";
+      dragDepth = 0;
+      const dt = e.dataTransfer;
+      if(dt && dt.files && dt.files.length){
+        await addFiles([...dt.files]);
+      }
+    });
+  }
+
+  /* ===========
+     API calls
+  =========== */
+  async function apiGet(path){
+    const base = ensureBaseUrl();
+    if(!base) return null;
+
+    const url = base + path;
+    try{
+      const res = await fetch(url, { method:"GET" });
+      const txt = await res.text();
+      let json = null;
+      try{ json = JSON.parse(txt); }catch{ /* non-json */ }
+      return { ok: res.ok, status: res.status, text: txt, json };
+    }catch(err){
+      return { ok:false, status: 0, text: String(err), json:null };
+    }
+  }
+
+  async function checkHealth(){
+    const base = ensureBaseUrl();
+    if(!base) return;
+
+    setStatus("warn", "Checking…", `base: ${base}`);
+    const h = await apiGet("/healthz");
+    const s = await apiGet("/api/status");
+
+    healthView.textContent = h ? (h.ok ? "ok" : `ng(${h.status})`) : "—";
+    statusView.textContent = s ? (s.ok ? "ok" : `ng(${s.status})`) : "—";
+    healthViewM.textContent = healthView.textContent;
+    statusViewM.textContent = statusView.textContent;
+
+    const ok = h && h.ok && s && s.ok;
+    if(ok){
+      setStatus("ok", "Connected", `base: ${base}`);
+      toastPush("health/status ok", "ok");
+    }else{
+      setStatus("bad", "Disconnected", `base: ${base}`);
+      toastPush("health/status failed", "bad");
+    }
+
+    // show raw into timeline (system msg)
+    pushMsg(mkMsg({
+      role:"system",
+      title:"Check",
+      badge:{kind: ok ? "ok":"bad", text: ok ? "ok":"ng"},
+      text: `GET /healthz => ${h ? (h.ok ? "ok":"ng") : "null"}\nGET /api/status => ${s ? (s.ok ? "ok":"ng") : "null"}`,
+      raw: { healthz: h, status: s }
+    }));
+  }
+
+  async function postCommand(){
+    const base = ensureBaseUrl();
+    if(!base) return;
+
+    const text = (prompt.value || "").trim();
+    if(!text && state.attachments.length === 0){
+      toastPush("空です（テキストまたは添付が必要）", "warn");
+      return;
+    }
+    if(state.totalBytes > CAP_BYTES){
+      toastPush("添付合計が1MBを超過（Fail-Closed：送信不可）", "bad");
+      return;
+    }
+
+    const localId = "local_" + Math.random().toString(16).slice(2,10);
+    const payload = {
+      prompt: text,
+      attachments: state.attachments.map(a=>({
+        name: a.name,
+        type: a.type,
+        size: a.size,
+        data_url: a.data_url
+      })),
+      meta: {
+        client_ts: nowISO(),
+        mode: state.planOnly ? "plan_only" : "execute",
+        ui: "console_v2_premium"
+      }
+    };
+
+    pushMsg(mkMsg({
+      role:"user",
+      title:"You",
+      badge:{kind:"warn", text:"sending"},
+      text,
+      raw: payload,
+      localId
+    }));
+
+    // Clear input (keep attachments until success to avoid accidental loss)
+    prompt.value = "";
+    autoGrow();
+
+    try{
+      const url = base + "/api/command";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type":"application/json" },
+        body: JSON.stringify(payload)
+      });
+      const txt = await res.text();
+      let json = null;
+      try{ json = JSON.parse(txt); }catch{ json = { raw_text: txt }; }
+
+      const ok = res.ok && json && json.ok !== false;
+      const cmd = json && (json.command_id || json.commandId || json.id);
+
+      // Keep last response
+      state.lastResponseRaw = json;
+      state.lastResponseText = JSON.stringify(json, null, 2);
+
+      // show assistant response as SYSTEM for now (Day0 ACK/log)
+      pushMsg(mkMsg({
+        role:"system",
+        title:"ACK",
+        badge:{kind: ok ? "ok":"bad", text: ok ? "ack":"error"},
+        text: ok ? `Command received.\n${cmd ? `command_id: ${cmd}` : ""}` : `Command failed.\nstatus: ${res.status}`,
+        raw: json,
+        commandId: cmd || null
+      }));
+
+      // If response contains preview_url, add to panel
+      applyPreviewFromResponse(json);
+
+      if(ok){
+        toastPush("sent (ack)", "ok");
+        // Optional: clear attachments on success
+        state.attachments = [];
+        state.totalBytes = 0;
+        renderAttachments();
+      }else{
+        toastPush("send failed", "bad");
+      }
+
+    }catch(err){
+      pushMsg(mkMsg({
+        role:"system",
+        title:"ERROR",
+        badge:{kind:"bad", text:"network"},
+        text: String(err),
+        raw: { error: String(err) }
+      }));
+      toastPush("network error", "bad");
+    }
+  }
+
+  function applyPreviewFromResponse(json){
+    // Flexible parsing (future):
+    // - preview_url: string
+    // - previews: [{url, label}]
+    // - screenshots: [{url}] or screenshot_urls: [...]
+    if(!json || typeof json !== "object") return;
+
+    const previews = [];
+    if(typeof json.preview_url === "string") previews.push({ url: json.preview_url, label: "preview" });
+    if(Array.isArray(json.previews)){
+      for(const p of json.previews){
+        if(p && typeof p.url === "string") previews.push({ url: p.url, label: p.label || "preview" });
+      }
+    }
+
+    if(previews.length){
+      // render
+      previewList.innerHTML = "";
+      previewListM.innerHTML = "";
+      for(const p of previews){
+        const it = document.createElement("div");
+        it.className = "item";
+        it.innerHTML = `
+          <div class="i1"><span>${escapeHtml(p.label)}</span><span class="muted">url</span></div>
+          <div class="i2"><a href="${escapeAttr(p.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(p.url)}</a></div>
+        `;
+        previewList.appendChild(it);
+
+        const it2 = it.cloneNode(true);
+        previewListM.appendChild(it2);
+      }
+    }
+
+    const shots = [];
+    if(Array.isArray(json.screenshots)){
+      for(const s of json.screenshots){
+        if(s && typeof s.url === "string") shots.push(s.url);
+      }
+    }
+    if(Array.isArray(json.screenshot_urls)){
+      for(const u of json.screenshot_urls){
+        if(typeof u === "string") shots.push(u);
+      }
+    }
+
+    if(shots.length){
+      renderShots(shots);
+    }
+  }
+
+  function renderShots(urls){
+    const render = (grid)=>{
+      grid.innerHTML = "";
+      for(const u of urls.slice(0,6)){
+        const d = document.createElement("div");
+        d.className = "thumb";
+        const img = document.createElement("img");
+        img.src = u;
+        img.alt = "screenshot";
+        d.appendChild(img);
+        d.addEventListener("click", ()=>{
+          imgFull.src = u;
+          dlgImage.showModal();
+        });
+        grid.appendChild(d);
+      }
+    };
+    render(shotGrid);
+    render(shotGridM);
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  }
+  function escapeAttr(s){
+    return escapeHtml(s);
+  }
+
+  /* ===========
+     TTS
+  =========== */
+  async function ttsSpeak(){
+    if(!state.ttsEnabled){
+      toastPush("TTS is OFF（SettingsでON）", "warn");
+      return;
+    }
+    const base = ensureBaseUrl();
+    if(!base) return;
+
+    // speak last response text, fallback to current prompt content
+    const text = (state.lastResponseRaw ? summarizeForTts(state.lastResponseRaw) : "").trim()
+      || state.lastResponseText.trim()
+      || "No response yet.";
+
+    try{
+      const res = await fetch(base + "/api/tts", {
+        method:"POST",
+        headers:{ "content-type":"application/json" },
+        body: JSON.stringify({ text, voice: state.ttsVoice })
+      });
+
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+
+      // Case A: audio stream
+      if(ct.includes("audio/") || ct.includes("application/octet-stream")){
+        const blob = await res.blob();
+        playBlob(blob);
+        toastPush("TTS playing", "ok");
         return;
       }
 
-      // size cap (raw)
-      const totalBytes = files.reduce((a,f)=>a+f.size,0);
-      if (totalBytes > MAX_TOTAL_BYTES) {
-        attachments = [];
-        fileInputEl.value = '';
-        renderFiles();
-        throw new Error(`添付合計が1MB超過です: ${totalBytes} bytes`);
+      // Case B: json { audio_base64 } or { audio_url }
+      const txt = await res.text();
+      let json = null;
+      try{ json = JSON.parse(txt); }catch{ json = null; }
+      if(json && typeof json.audio_url === "string"){
+        playUrl(json.audio_url);
+        toastPush("TTS playing", "ok");
+        return;
+      }
+      if(json && typeof json.audio_base64 === "string"){
+        const blob = b64ToBlob(json.audio_base64, "audio/mpeg");
+        playBlob(blob);
+        toastPush("TTS playing", "ok");
+        return;
       }
 
-      const converted = [];
-      for (const f of files) {
-        const dataUrl = await fileToDataUrl(f);
-        converted.push({ name: f.name, type: f.type, size: f.size, dataUrl });
+      toastPush("TTS response unsupported", "bad");
+      pushMsg(mkMsg({
+        role:"system",
+        title:"TTS",
+        badge:{kind:"bad", text:"unsupported"},
+        text: "TTS endpoint returned unsupported payload.",
+        raw: { content_type: ct, text: txt }
+      }));
+
+    }catch(err){
+      toastPush("TTS failed", "bad");
+      pushMsg(mkMsg({
+        role:"system",
+        title:"TTS ERROR",
+        badge:{kind:"bad", text:"error"},
+        text: String(err),
+        raw: { error: String(err) }
+      }));
+    }
+  }
+
+  function summarizeForTts(obj){
+    // minimal safe summary: keep it short for voice
+    try{
+      if(obj.message) return String(obj.message);
+      if(obj.ok === true && obj.command_id) return `Command received. Command ID ${obj.command_id}.`;
+      return "Received response.";
+    }catch{
+      return "Received response.";
+    }
+  }
+
+  function b64ToBlob(b64, mime){
+    const bin = atob(b64);
+    const len = bin.length;
+    const arr = new Uint8Array(len);
+    for(let i=0;i<len;i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime || "application/octet-stream" });
+  }
+
+  function playBlob(blob){
+    stopAudio();
+    const url = URL.createObjectURL(blob);
+    state.audio = new Audio(url);
+    state.audio.onended = ()=> URL.revokeObjectURL(url);
+    state.audio.play().catch(()=>{});
+  }
+  function playUrl(url){
+    stopAudio();
+    state.audio = new Audio(url);
+    state.audio.play().catch(()=>{});
+  }
+  function stopAudio(){
+    if(state.audio){
+      try{ state.audio.pause(); }catch{}
+      state.audio = null;
+      toastPush("audio stopped", "ok");
+    }
+  }
+
+  /* ===========
+     SpeechRecognition (Phase1.1 UI ready; may be unsupported)
+  =========== */
+  function setupMic(){
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SR){
+      // not supported
+      return null;
+    }
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = "ja-JP";
+
+    rec.onresult = (ev)=>{
+      let finalText = "";
+      let interim = "";
+
+      for(let i=ev.resultIndex; i<ev.results.length; i++){
+        const r = ev.results[i];
+        const t = r[0].transcript;
+        if(r.isFinal) finalText += t;
+        else interim += t;
       }
-      attachments = converted;
-      renderFiles();
-    } catch (e) {
-      setMeta(String(e), false);
-      resultEl.textContent = JSON.stringify({ error: String(e) }, null, 2);
-    }
-  });
 
-  clearFilesEl.addEventListener('click', () => {
-    attachments = [];
-    fileInputEl.value = '';
-    renderFiles();
-  });
-
-  /** send **/
-  sendBtnEl.addEventListener('click', async () => {
-    const base = normBase(apiBaseEl.value.trim());
-    if (!base) {
-      setMeta('API Base URL が未設定です', false);
-      return;
-    }
-
-    // defensive cap again
-    const total = attachments.reduce((a,f)=>a+f.size,0);
-    if (total > MAX_TOTAL_BYTES) {
-      setMeta(`添付合計が1MB超過です: ${total} bytes`, false);
-      return;
-    }
-
-    const payload = {
-      prompt: promptEl.value || '',
-      attachments: attachments.map(a => ({
-        name: a.name,
-        type: a.type || 'application/octet-stream',
-        size: a.size,
-        // dataUrl format: "data:<mime>;base64,XXXX"
-        data_url: a.dataUrl
-      }))
+      const base = prompt.value || "";
+      // append finalText, show interim as light hint (we simply append interim too, but can be noisy)
+      if(finalText){
+        prompt.value = (base + (base ? "\n" : "") + finalText).trim();
+      }else if(interim){
+        // show interim without permanently committing: we reflect in placeholder hint only
+        hint.textContent = `Mic… ${interim.slice(0, 60)}`;
+      }
+      autoGrow();
     };
 
-    sendStateEl.textContent = '送信中...';
-    try {
-      const url = base + '/api/command';
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const text = await r.text();
-      let body = text;
-      try { body = JSON.parse(text); } catch {}
-      const out = { url, status: r.status, body };
-      resultEl.textContent = JSON.stringify(out, null, 2);
-      setMeta(`/api/command => HTTP ${out.status} (${out.url})`, out.status === 200);
-    } catch (e) {
-      resultEl.textContent = JSON.stringify({ error: String(e) }, null, 2);
-      setMeta(String(e), false);
-    } finally {
-      sendStateEl.textContent = '';
+    rec.onerror = (e)=>{
+      state.micOn = false;
+      toastPush("Mic error（権限/対応/ネットワーク）", "bad");
+      setMicUI(false);
+      hint.textContent = "音声入力が利用できません（権限/対応ブラウザ要確認）";
+    };
+
+    rec.onend = ()=>{
+      state.micOn = false;
+      setMicUI(false);
+      updateViews();
+    };
+
+    return rec;
+  }
+
+  function setMicUI(on){
+    const btnMic = el("btnMic");
+    btnMic.classList.toggle("danger", !!on);
+    btnMic.textContent = on ? "Mic ON" : "Mic";
+  }
+
+  function toggleMic(){
+    if(!state.recognition){
+      toastPush("SpeechRecognition 非対応（ブラウザ要件）", "warn");
+      hint.textContent = "このブラウザはSTT非対応の可能性があります（Chrome系推奨）。";
+      return;
+    }
+    if(state.micOn){
+      try{ state.recognition.stop(); }catch{}
+      state.micOn = false;
+      setMicUI(false);
+      updateViews();
+      return;
+    }
+    try{
+      state.recognition.start();
+      state.micOn = true;
+      setMicUI(true);
+      toastPush("Mic started", "ok");
+    }catch{
+      toastPush("Mic start failed", "bad");
+    }
+  }
+
+  /* ===========
+     Settings
+  =========== */
+  function loadSettings(){
+    state.baseUrl = localStorage.getItem(LS.baseUrl) || "";
+    state.ttsEnabled = (localStorage.getItem(LS.ttsEnabled) || "0") === "1";
+    state.planOnly = (localStorage.getItem(LS.planOnly) || "1") === "1";
+    state.ttsVoice = localStorage.getItem(LS.ttsVoice) || "auto";
+
+    baseUrlInput.value = state.baseUrl;
+    ttsVoiceSel.value = state.ttsVoice;
+
+    updateViews();
+  }
+
+  function saveSettings(){
+    state.baseUrl = baseUrlInput.value.trim();
+    state.ttsVoice = ttsVoiceSel.value;
+
+    localStorage.setItem(LS.baseUrl, state.baseUrl);
+    localStorage.setItem(LS.ttsEnabled, state.ttsEnabled ? "1":"0");
+    localStorage.setItem(LS.planOnly, state.planOnly ? "1":"0");
+    localStorage.setItem(LS.ttsVoice, state.ttsVoice);
+
+    updateViews();
+    toastPush("settings saved", "ok");
+  }
+
+  function resetSettings(){
+    localStorage.removeItem(LS.baseUrl);
+    localStorage.removeItem(LS.ttsEnabled);
+    localStorage.removeItem(LS.planOnly);
+    localStorage.removeItem(LS.ttsVoice);
+    state.baseUrl = "";
+    state.ttsEnabled = false;
+    state.planOnly = true;
+    state.ttsVoice = "auto";
+    baseUrlInput.value = "";
+    ttsVoiceSel.value = "auto";
+    updateViews();
+    toastPush("settings reset", "ok");
+  }
+
+  function toggleSwitch(sw, key){
+    const on = !sw.classList.contains("on");
+    sw.classList.toggle("on", on);
+    if(key === "tts") state.ttsEnabled = on;
+    if(key === "plan") state.planOnly = on;
+    updateViews();
+  }
+
+  /* ===========
+     Events
+  =========== */
+  el("btnSettings").addEventListener("click", ()=>{
+    baseUrlInput.value = state.baseUrl || "";
+    ttsVoiceSel.value = state.ttsVoice || "auto";
+    dlgSettings.showModal();
+  });
+  el("btnCloseSettings").addEventListener("click", ()=>dlgSettings.close());
+  el("btnSave").addEventListener("click", ()=>{ saveSettings(); dlgSettings.close(); });
+  el("btnReset").addEventListener("click", resetSettings);
+
+  swTts.addEventListener("click", ()=>toggleSwitch(swTts, "tts"));
+  swPlan.addEventListener("click", ()=>toggleSwitch(swPlan, "plan"));
+
+  el("btnCheck").addEventListener("click", checkHealth);
+  el("btnHealth").addEventListener("click", async ()=>{
+    const r = await apiGet("/healthz");
+    healthView.textContent = r ? (r.ok ? "ok" : `ng(${r.status})`) : "—";
+    healthViewM.textContent = healthView.textContent;
+    pushMsg(mkMsg({ role:"system", title:"GET /healthz", badge:{kind:r?.ok?"ok":"bad", text:r?.ok?"ok":"ng"}, text:r?.text || "", raw:r }));
+  });
+  el("btnStatus").addEventListener("click", async ()=>{
+    const r = await apiGet("/api/status");
+    statusView.textContent = r ? (r.ok ? "ok" : `ng(${r.status})`) : "—";
+    statusViewM.textContent = statusView.textContent;
+    pushMsg(mkMsg({ role:"system", title:"GET /api/status", badge:{kind:r?.ok?"ok":"bad", text:r?.ok?"ok":"ng"}, text:r?.text || "", raw:r }));
+  });
+  el("btnClear").addEventListener("click", ()=>{ resetLog(); toastPush("log cleared", "ok"); });
+
+  /* Mobile panel mirrors */
+  el("btnPanel").addEventListener("click", ()=>{
+    // mirror preview/screenshot placeholders for now
+    previewListM.innerHTML = previewList.innerHTML || "";
+    shotGridM.innerHTML = shotGrid.innerHTML || "";
+    dlgPanel.showModal();
+  });
+  el("btnClosePanel").addEventListener("click", ()=>dlgPanel.close());
+  el("btnPanelDone").addEventListener("click", ()=>dlgPanel.close());
+
+  el("btnHealthM").addEventListener("click", ()=>el("btnHealth").click());
+  el("btnStatusM").addEventListener("click", ()=>el("btnStatus").click());
+  el("btnClearM").addEventListener("click", ()=>el("btnClear").click());
+
+  el("btnCloseImage").addEventListener("click", ()=>dlgImage.close());
+
+  el("btnAttach").addEventListener("click", ()=>{
+    fileInput.value = "";
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", async ()=>{
+    await addFiles([...fileInput.files]);
+  });
+
+  el("btnMic").addEventListener("click", toggleMic);
+
+  el("btnSend").addEventListener("click", postCommand);
+
+  el("btnTTS").addEventListener("click", ttsSpeak);
+  el("btnStopAudio").addEventListener("click", stopAudio);
+
+  prompt.addEventListener("input", autoGrow);
+  prompt.addEventListener("keydown", (e)=>{
+    if(e.key === "Enter" && !e.shiftKey){
+      e.preventDefault();
+      postCommand();
     }
   });
 
-  renderFiles();
+  // Drag & Drop
+  setupDragDrop();
+
+  // Init
+  resetLog();
+  loadSettings();
+  state.recognition = setupMic();
+  setMicUI(false);
+
+  // baseline status
+  if(safeBaseUrl()){
+    setStatus("warn", "Base set", `base: ${safeBaseUrl()}`);
+  }else{
+    setStatus("", "Not checked", "base: —");
+  }
+
+  // placeholder inspector values
+  baseUrlView.textContent = safeBaseUrl() || "—";
+  baseUrlViewM.textContent = safeBaseUrl() || "—";
+  healthView.textContent = "—";
+  statusView.textContent = "—";
+  healthViewM.textContent = "—";
+  statusViewM.textContent = "—";
 })();
 </script>
 </body>
