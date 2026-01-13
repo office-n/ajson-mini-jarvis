@@ -13,3 +13,26 @@
 - (B) Verbatim (script/constitution/numbers) with markers
 - (C) Checklist
 - (D) This SHP itself
+
+## Backup SOP（恒久 / Fail-Closed）
+
+保存先: `/Users/Backups/ajson-mini-jarvis/`
+
+出力:
+- `latest.zip`（常に最新版へのシンボリックリンク）
+- `latest.txt`（最新版zipのフルパス）
+- `YYYYMMDD-HHMMSS_<sha7>_main.zip`（凍結zip）
+- `...zip.manifest.tsv`（ファイル一覧）
+- `...zip.sha256`（改ざん検知）
+
+方針:
+- GitHub API `zipball` は環境差で不安定になり得るため不採用。
+- `codeload.github.com` を唯一の正（Source of Truth）とする。
+- Fail-Closed: `file` 判定と `test -s` を必須とする。
+
+実行（ボスの指示: `backup`）:
+- リポジトリに同梱された `scripts/backup.sh` を実行するだけで良い。
+
+```bash
+bash scripts/backup.sh
+```
