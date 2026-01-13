@@ -1,55 +1,253 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>JARVIS Console V1</title>
-<style>
-body { font-family: -apple-system,BlinkMacSystemFont,monospace; background:#000; color:#0f0; padding:20px; line-height:1.5; }
-.card { border:1px solid #333; padding:15px; margin-bottom:20px; border-radius:8px; }
-.meter { background:#222; height:10px; width:100%; margin-top:5px; border-radius:5px; }
-.fill { background:#0f0; height:100%; width:0%; border-radius:5px; transition:width .5s; }
-input { background:#111; border:1px solid #333; color:#fff; padding:10px; width:70%; border-radius:4px; }
-button{ background:#0f0; color:#000; border:none; padding:10px 20px; cursor:pointer; border-radius:4px; font-weight:bold; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AJSON mini Console</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    input[type="text"]{ width: min(820px, 100%); padding: 10px; }
+    textarea { width: min(980px, 100%); height: 180px; padding: 10px; }
+    button { padding: 10px 14px; cursor: pointer; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; margin: 14px 0; }
+    .muted { color: #666; }
+    pre { background: #f7f7f7; padding: 12px; border-radius: 8px; overflow: auto; }
+    ul { margin: 8px 0 0 18px; }
+    .ok { color: #0a7a0a; font-weight: 600; }
+    .ng { color: #b00020; font-weight: 600; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  </style>
 </head>
 <body>
-<h1>JARVIS Console <span style="font-size:.6em; color:#666;">[ONLINE / V1 Mock]</span></h1>
+  <h1>AJSON mini Console</h1>
 
-<div class="card">
-  <strong>💰 Budget Meter (Dev)</strong>
-  <div id="btxt">Used: ¥0 / ¥3,000 (Stop at 90%)</div>
-  <div class="meter"><div id="fill" class="fill"></div></div>
-</div>
+  <div class="card">
+    <div class="row">
+      <label class="mono">API Base URL</label>
+      <input id="apiBase" type="text" placeholder="例: https://xxxx.workers.dev" />
+      <button id="saveApi">保存</button>
+      <button id="healthzBtn">/healthz</button>
+      <button id="statusBtn">/api/status</button>
+    </div>
+    <div class="muted" style="margin-top:8px;">
+      Console は Pages 上の静的UIです。実際の処理先（Workers）の URL をここに設定します（localStorage保存）。
+    </div>
+  </div>
 
-<div class="card">
-  <strong>💬 Command Center</strong>
-  <div id="log" style="margin:10px 0; color:#aaa; font-size:.9em;">
-    > System Initialized.<br>> Ready for instruction.
+  <div class="card">
+    <h2>Command</h2>
+    <textarea id="prompt" placeholder="指示（テキスト）を入力"></textarea>
+
+    <div class="row" style="margin-top:10px;">
+      <label>添付（複数可 / 合計 1MB以下）</label>
+      <input id="fileInput" type="file" multiple />
+      <button id="clearFiles">添付クリア</button>
+    </div>
+
+    <div id="fileInfo" class="muted" style="margin-top:8px;"></div>
+
+    <div class="row" style="margin-top:12px;">
+      <button id="sendBtn">送信（/api/command）</button>
+      <span id="sendState" class="muted"></span>
+    </div>
   </div>
-  <div style="display:flex; gap:10px;">
-    <input type="text" id="cmd" placeholder="例: ヘッダーのロゴを大きくして">
-    <button onclick="send()">SEND</button>
+
+  <div class="card">
+    <h2>Result</h2>
+    <div id="resultMeta" class="muted"></div>
+    <pre id="result" class="mono">{}</pre>
   </div>
-</div>
 
 <script>
-let used=0, limit=3000;
-function render(){
-  document.getElementById('btxt').textContent = `Used: ¥${used} / ¥${limit} (Stop at 90%)`;
-  document.getElementById('fill').style.width = Math.min(100, (used/limit)*100) + '%';
-}
-function send(){
-  const cmd=document.getElementById('cmd').value.trim(); if(!cmd) return;
-  const stop = used >= limit*0.9;
-  if(stop){
-    document.getElementById('log').innerHTML += `<br>> JARVIS: 予算90%到達。新規受付停止（Mock）`;
-    return;
+(() => {
+  const MAX_TOTAL_BYTES = 1_000_000; // 1MB hard cap (client)
+  const apiBaseEl = document.getElementById('apiBase');
+  const saveApiEl = document.getElementById('saveApi');
+  const healthzBtn = document.getElementById('healthzBtn');
+  const statusBtn = document.getElementById('statusBtn');
+
+  const promptEl = document.getElementById('prompt');
+  const fileInputEl = document.getElementById('fileInput');
+  const clearFilesEl = document.getElementById('clearFiles');
+  const fileInfoEl = document.getElementById('fileInfo');
+
+  const sendBtnEl = document.getElementById('sendBtn');
+  const sendStateEl = document.getElementById('sendState');
+  const resultEl = document.getElementById('result');
+  const resultMetaEl = document.getElementById('resultMeta');
+
+  /** localStorage **/
+  const LS_KEY = 'ajson_api_base';
+  const saved = localStorage.getItem(LS_KEY);
+  if (saved) apiBaseEl.value = saved;
+
+  function normBase(base) {
+    if (!base) return '';
+    return base.replace(/\/+$/, '');
   }
-  used += 60; render();
-  document.getElementById('log').innerHTML += `<br>> Boss: ${cmd}<br>> JARVIS: 了解。PR作成とCI検証を開始します...(Mock)`;
-  document.getElementById('cmd').value='';
-}
-render();
+
+  saveApiEl.addEventListener('click', () => {
+    const v = normBase(apiBaseEl.value.trim());
+    apiBaseEl.value = v;
+    localStorage.setItem(LS_KEY, v);
+    setMeta(`API Base URL を保存しました: ${v}`);
+  });
+
+  function setMeta(msg, ok=true) {
+    resultMetaEl.innerHTML = ok
+      ? `<span class="ok">OK</span> ${escapeHtml(msg)}`
+      : `<span class="ng">NG</span> ${escapeHtml(msg)}`;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  async function apiGet(path) {
+    const base = normBase(apiBaseEl.value.trim());
+    if (!base) throw new Error('API Base URL が未設定です');
+    const url = base + path;
+    const r = await fetch(url, { method: 'GET' });
+    const text = await r.text();
+    let body = text;
+    try { body = JSON.parse(text); } catch {}
+    return { url, status: r.status, body };
+  }
+
+  healthzBtn.addEventListener('click', async () => {
+    try {
+      const out = await apiGet('/healthz');
+      resultEl.textContent = JSON.stringify(out, null, 2);
+      setMeta(`/healthz => HTTP ${out.status} (${out.url})`, out.status === 200);
+    } catch (e) {
+      resultEl.textContent = JSON.stringify({ error: String(e) }, null, 2);
+      setMeta(String(e), false);
+    }
+  });
+
+  statusBtn.addEventListener('click', async () => {
+    try {
+      const out = await apiGet('/api/status');
+      resultEl.textContent = JSON.stringify(out, null, 2);
+      setMeta(`/api/status => HTTP ${out.status} (${out.url})`, out.status === 200);
+    } catch (e) {
+      resultEl.textContent = JSON.stringify({ error: String(e) }, null, 2);
+      setMeta(String(e), false);
+    }
+  });
+
+  /** attachments **/
+  let attachments = []; // {name,type,size,dataUrl}
+
+  function renderFiles() {
+    if (!attachments.length) {
+      fileInfoEl.textContent = '添付なし';
+      return;
+    }
+    const total = attachments.reduce((a,f)=>a+f.size,0);
+    const lines = attachments.map(f => `- ${f.name} (${f.type || 'application/octet-stream'}, ${f.size} bytes)`).join('\n');
+    fileInfoEl.innerHTML = `<div>合計: <b>${total}</b> / ${MAX_TOTAL_BYTES} bytes</div><pre class="mono">${escapeHtml(lines)}</pre>`;
+  }
+
+  async function fileToDataUrl(file) {
+    return await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onerror = () => reject(new Error(`FileReader error: ${file.name}`));
+      fr.onload = () => resolve(fr.result);
+      fr.readAsDataURL(file);
+    });
+  }
+
+  fileInputEl.addEventListener('change', async () => {
+    try {
+      const files = Array.from(fileInputEl.files || []);
+      if (!files.length) {
+        attachments = [];
+        renderFiles();
+        return;
+      }
+
+      // size cap (raw)
+      const totalBytes = files.reduce((a,f)=>a+f.size,0);
+      if (totalBytes > MAX_TOTAL_BYTES) {
+        attachments = [];
+        fileInputEl.value = '';
+        renderFiles();
+        throw new Error(`添付合計が1MB超過です: ${totalBytes} bytes`);
+      }
+
+      const converted = [];
+      for (const f of files) {
+        const dataUrl = await fileToDataUrl(f);
+        converted.push({ name: f.name, type: f.type, size: f.size, dataUrl });
+      }
+      attachments = converted;
+      renderFiles();
+    } catch (e) {
+      setMeta(String(e), false);
+      resultEl.textContent = JSON.stringify({ error: String(e) }, null, 2);
+    }
+  });
+
+  clearFilesEl.addEventListener('click', () => {
+    attachments = [];
+    fileInputEl.value = '';
+    renderFiles();
+  });
+
+  /** send **/
+  sendBtnEl.addEventListener('click', async () => {
+    const base = normBase(apiBaseEl.value.trim());
+    if (!base) {
+      setMeta('API Base URL が未設定です', false);
+      return;
+    }
+
+    // defensive cap again
+    const total = attachments.reduce((a,f)=>a+f.size,0);
+    if (total > MAX_TOTAL_BYTES) {
+      setMeta(`添付合計が1MB超過です: ${total} bytes`, false);
+      return;
+    }
+
+    const payload = {
+      prompt: promptEl.value || '',
+      attachments: attachments.map(a => ({
+        name: a.name,
+        type: a.type || 'application/octet-stream',
+        size: a.size,
+        // dataUrl format: "data:<mime>;base64,XXXX"
+        data_url: a.dataUrl
+      }))
+    };
+
+    sendStateEl.textContent = '送信中...';
+    try {
+      const url = base + '/api/command';
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const text = await r.text();
+      let body = text;
+      try { body = JSON.parse(text); } catch {}
+      const out = { url, status: r.status, body };
+      resultEl.textContent = JSON.stringify(out, null, 2);
+      setMeta(`/api/command => HTTP ${out.status} (${out.url})`, out.status === 200);
+    } catch (e) {
+      resultEl.textContent = JSON.stringify({ error: String(e) }, null, 2);
+      setMeta(String(e), false);
+    } finally {
+      sendStateEl.textContent = '';
+    }
+  });
+
+  renderFiles();
+})();
 </script>
 </body>
 </html>
